@@ -1,9 +1,24 @@
 import { createSlice } from "@reduxjs/toolkit";
-import { dummyWorkspaces } from "../assets/assets";
+import { createAsyncThunk } from "@reduxjs/toolkit";
+import api from "../configs/api";
+
+export const fetchWorkspaces = createAsyncThunk("workspace/fetchWorkspaces", async ({getToken}) => {
+    try{
+        const {data} = await api.get("api/workspaces", {
+            headers: {
+                Authorization: `Bearer ${await getToken()}`
+            }
+        });
+        return data.workspaces || [];
+    } catch (error) {
+       console.error(error?.response?.data?.message || error.message);
+       return [];
+    }
+});
 
 const initialState = {
-    workspaces: dummyWorkspaces || [],
-    currentWorkspace: dummyWorkspaces[1],
+    workspaces:  [],
+    currentWorkspace: null,
     loading: false,
 };
 
@@ -102,7 +117,35 @@ const workspaceSlice = createSlice({
                 } : w
             );
         }
-
+    },
+    extraReducers: (builder) => {
+        builder.addCase(fetchWorkspaces.pending, (state) => {
+            state.loading = true;
+        });
+        builder.addCase(fetchWorkspaces.fulfilled, (state, action) => {
+            state.loading = false;
+            state.workspaces = action.payload;
+            if(action.payload.length > 0){
+                const currentWorkspaceId = localStorage.getItem("currentWorkspaceId");
+                if(currentWorkspaceId){
+                   const findWorkspace = action.payload.find((w) => w.id === currentWorkspaceId);
+                   if(findWorkspace){
+                       state.currentWorkspace = findWorkspace;
+                   } else {
+                       state.currentWorkspace = action.payload[0];
+                      // localStorage.setItem("currentWorkspaceId", action.payload[0].id);
+                   }
+                }
+                else{
+                    state.currentWorkspace = action.payload[0];
+                   // localStorage.setItem("currentWorkspaceId", action.payload[0].id);
+                }
+            }
+            state.loading = false;
+        });
+        builder.addCase(fetchWorkspaces.rejected, (state) => {
+            state.loading = false;
+        })    
     }
 });
 
