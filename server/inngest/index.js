@@ -104,7 +104,7 @@ const syncWorkspaceDeletion = inngest.createFunction(
 
 //save member data to db
 const syncWorkspaceMemberCreation = inngest.createFunction(
-    { id: 'create-workspace-member-from-clerk', triggers: { event: 'clerk/organizationInvitation.accepted' } },
+    { id: 'sync-workspace-member-from-clerk', triggers: { event: 'clerk/organizationInvitation.accepted' } },
     async ({ event }) => {
         const {data} = event;
         await prisma.workspaceMember.create({
