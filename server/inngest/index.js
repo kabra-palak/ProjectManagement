@@ -101,18 +101,6 @@ const syncWorkspaceDeletion = inngest.createFunction(
         })
     }
 )
-// delete workspace data from db
-const syncWorkspaceDeletion = inngest.createFunction(
-    { id: 'delete-workspace-with-clerk', triggers: { event: 'clerk/organization.deleted' } },
-    async ({ event }) => {
-        const {data} = event;
-        await prisma.workspace.delete({
-            where: {
-                id: data.id,
-            }
-        })
-    }
-)
 
 //save member data to db
 const syncWorkspaceMemberCreation = inngest.createFunction(
