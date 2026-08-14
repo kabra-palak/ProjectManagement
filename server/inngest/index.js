@@ -50,24 +50,43 @@ const syncUserUpdation = inngest.createFunction(
 const syncWorkspaceCreation = inngest.createFunction(
     { id: 'sync-workspace-from-clerk', triggers: { event: 'clerk/organization.created' } },
     async ({ event }) => {
-        const {data} = event;
-        await prisma.workspace.create({
-            data: {
+        const { data } = event;
+        const ownerId = data.created_by ?? data.created_by_user_id ?? data.created_by_id;
+        // Use upsert to avoid failing when the workspace already exists
+        await prisma.workspace.upsert({
+            where: { id: data.id },
+            update: {
+                name: data.name,
+                slug: data.slug,
+                image: data?.image_url,
+                ownerId: ownerId,
+            },
+            create: {
                 id: data.id,
                 name: data.name,
                 slug: data.slug,
-                ownerId: data.created_by,
+                ownerId: ownerId,
                 image: data?.image_url,
             }
-        })
-        //add creator as admin
-        await prisma.workspaceMember.create({
-            data: {
-                workspaceId: data.id,
-                userId: data.created_by,
-                role: "ADMIN",
+        });
+
+        // add creator as admin; tolerate unique-constraint if already present
+        try {
+            await prisma.workspaceMember.create({
+                data: {
+                    workspaceId: data.id,
+                    userId: ownerId,
+                    role: "ADMIN",
+                }
+            });
+        } catch (e) {
+            // ignore duplicate member errors (P2002), rethrow others
+            if (e.code && e.code === 'P2002') {
+                // already exists - no-op
+            } else {
+                throw e;
             }
-        })
+        }
     }
 ) 
 
@@ -107,13 +126,22 @@ const syncWorkspaceMemberCreation = inngest.createFunction(
     { id: 'sync-workspace-member-from-clerk', triggers: { event: 'clerk/organizationInvitation.accepted' } },
     async ({ event }) => {
         const {data} = event;
-        await prisma.workspaceMember.create({
-            data: {
-                workspaceId: data.organization_id,
-                userId: data.user_id,
-                role: String(data.role_name).toUpperCase(),
+        const role = data.role_name ? String(data.role_name).toUpperCase() : 'MEMBER';
+        try {
+            await prisma.workspaceMember.create({
+                data: {
+                    workspaceId: data.organization_id,
+                    userId: data.user_id,
+                    role,
+                }
+            })
+        } catch (e) {
+            if (e.code && e.code === 'P2002') {
+                // already a member, ignore
+            } else {
+                throw e;
             }
-        })
+        }
     }
 )
 export const functions = [syncUserCreation, syncUserDeletion, syncUserUpdation, syncWorkspaceCreation, syncWorkspaceUpdation, syncWorkspaceDeletion, syncWorkspaceMemberCreation]; 
